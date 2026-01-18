@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudDrive</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<style>
+body {
+  font-family: 'Inter', sans-serif;
+}
+.glass {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(10px);
+}
+.file-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.file-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+.file-actions {
+  opacity: 0;
+  transition: 0.2s;
+}
+.file-card:hover .file-actions {
+  opacity: 1;
+}
+</style>
+</head>
+
+<body class="bg-gradient-to-br from-indigo-500 via-blue-400 to-cyan-300 min-h-screen">
+
+<!-- ================= LOGIN PAGE ================= -->
+
+<div id="loginPage" class="flex items-center justify-center min-h-screen">
+
+  <div class="glass p-10 rounded-2xl shadow-2xl w-96 text-center border border-white/40">
+      <div class="mb-6">
+        <i class="fas fa-cloud text-5xl text-blue-600"></i>
+        <h2 class="text-3xl font-bold mt-3 text-gray-800">CloudDrive</h2>
+        <p class="text-gray-500">Store your files securely</p>
+      </div>
+
+      <input id="email" type="email" placeholder="Email"
+        class="w-full border border-gray-300 p-3 rounded-lg mb-3 focus:ring-2 focus:ring-blue-400 outline-none">
+
+      <input id="password" type="password" placeholder="Password"
+        class="w-full border border-gray-300 p-3 rounded-lg mb-4 focus:ring-2 focus:ring-blue-400 outline-none">
+
+      <button onclick="login()" 
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3 font-semibold transition">
+        Login
+      </button>
+
+      <button onclick="signup()" 
+        class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition">
+        Sign Up
+      </button>
+
+      <p id="msg" class="text-sm text-red-500 mt-4"></p>
+  </div>
+</div>
+
+
+<!-- ================= CLOUD DRIVE PAGE ================= -->
+
+<div id="appPage" class="hidden py-8">
+
+<div class="max-w-6xl mx-auto px-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-cloud text-4xl text-white"></i>
+            <h1 class="text-3xl font-bold text-white">CloudDrive</h1>
+        </div>
+        <button onclick="logout()" 
+          class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg shadow transition">
+          Logout
+        </button>
+    </div>
+
+    <!-- Status Card -->
+    <div class="glass rounded-xl p-6 shadow mb-6 text-center">
+        <div id="status" class="text-blue-700 font-semibold">
+            Connecting...
+        </div>
+
+        <div class="flex justify-center gap-4 mt-4">
+            <label for="fileInput"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg cursor-pointer transition shadow">
+                Upload Files
+            </label>
+            <input type="file" id="fileInput" multiple class="hidden">
+
+            <button id="refreshBtn"
+              class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg transition shadow">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- File Grid -->
+    <div class="glass rounded-xl p-6 shadow">
+        <h2 class="font-bold mb-4 text-gray-800">
+            Your Files 
+            <span id="fileCount"
+              class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">
+              0
+            </span>
+        </h2>
+
+        <div id="fileGrid"
+          class="grid grid-cols-2 md:grid-cols-4 gap-5">
+        </div>
+    </div>
+
+</div>
+</div>
+
+
+<script>
+/* ===== Supabase Config ===== */
+
+const SUPABASE_URL = 'https://jtdwbfllfnkwbwsdmztt.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_JfexHCljX7tTMsjjmXpjLQ_vlWh0Qob'; 
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+
+/* ===== Elements ===== */
+
+const loginPage = document.getElementById("loginPage");
+const appPage   = document.getElementById("appPage");
+const fileGrid = document.getElementById('fileGrid');
+const fileInput = document.getElementById('fileInput');
+const status = document.getElementById('status');
+const fileCountEl = document.getElementById('fileCount');
+const refreshBtn = document.getElementById('refreshBtn');
+
+
+/* ===== Auth Check ===== */
+
+async function checkAuth(){
+    const { data: { user } } = await supabaseClient.auth.getUser();
+
+    if(user){
+        loginPage.classList.add("hidden");
+        appPage.classList.remove("hidden");
+        loadFiles();
+    } else {
+        loginPage.classList.remove("hidden");
+        appPage.classList.add("hidden");
+    }
+}
+checkAuth();
+
+
+/* ===== Auth ===== */
+
+async function signup(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const { error } = await supabaseClient.auth.signUp({ email, password });
+  document.getElementById('msg').innerText =
+      error ? error.message : "Signup success! Now login.";
+}
+
+async function login(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if(error){
+      document.getElementById('msg').innerText = error.message;
+  } else {
+      checkAuth();
+  }
+}
+
+async function logout(){
+    await supabaseClient.auth.signOut();
+    checkAuth();
+}
+
+
+/* ===== Drive Logic ===== */
+
+function showStatus(msg){ status.innerText = msg; }
+
+async function loadFiles(){
+    showStatus("Loading files...");
+
+    const { data, error } = await supabaseClient
+        .storage.from('drive_files')
+        .list('', { limit:100 });
+
+    if(error){
+        showStatus("Error loading files ❌");
+        return;
+    }
+
+    if(data.length === 0){
+        fileGrid.innerHTML = "<p class='text-gray-500'>No files uploaded.</p>";
+        fileCountEl.innerText = "0";
+        showStatus("Bucket ready ✅");
+        return;
+    }
+
+    fileGrid.innerHTML = data.map(file => `
+        <div class="bg-white rounded-xl p-4 file-card relative">
+            <i class="fas fa-file-alt text-3xl text-blue-500 mb-2"></i>
+            <p class="text-sm font-semibold truncate">${file.name}</p>
+
+            <div class="file-actions absolute top-2 right-2 flex gap-2">
+                <button onclick="downloadFile('${file.name}')" class="text-blue-600">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button onclick="deleteFile('${file.name}')" class="text-red-600">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+
+    fileCountEl.innerText = data.length;
+    showStatus("Files loaded ✅");
+}
+
+
+fileInput.addEventListener('change', async (e)=>{
+    const files = [...e.target.files];
+    if(files.length === 0) return;
+
+    showStatus("Uploading...");
+
+    for(let file of files){
+        const fileName = Date.now()+"_"+file.name;
+        await supabaseClient.storage.from('drive_files').upload(fileName, file);
+    }
+
+    showStatus("Upload complete ✅");
+    loadFiles();
+});
+
+
+async function downloadFile(filename){
+    const { data, error } = await supabaseClient.storage
+        .from('drive_files')
+        .createSignedUrl(filename, 60);
+
+    if(error){
+        showStatus("Download failed ❌");
+        return;
+    }
+
+    const a = document.createElement('a');
+    a.href = data.signedUrl;
+    a.download = filename;
+    a.click();
+}
+
+
+async function deleteFile(filename){
+    if(!confirm(`Delete "${filename}" ?`)) return;
+
+    const { error } = await supabaseClient.storage
+        .from('drive_files')
+        .remove([filename]);
+
+    if(error){
+        showStatus("Delete failed ❌");
+    } else {
+        showStatus("File deleted ✅");
+        loadFiles();
+    }
+}
+
+refreshBtn.addEventListener('click', loadFiles);
+</script>
+
+</body>
+</html>
